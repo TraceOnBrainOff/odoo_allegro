@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="product_send_allegro_offer_wizard_view_form" model="ir.ui.view">
+        <field name="name">product.send.allegro.offer.wizard.view</field>
+        <field name="model">product.send.allegro.offer.wizard</field>
+        <field name="arch" type="xml">
+            <form>
+                <sheet>
+                    <p>
+                        You selected <field name="al_products_selected"/> products,
+                        <field name="al_products_to_process"/> of which will be processed.
+                        <span attrs="{'invisible': [('al_products_unable_to_process', '=', 0)]}">
+                            <field name="al_products_unable_to_process"/> products will not be
+                            processed because their barcode number is not set.
+                        </span>
+                        <span attrs="{'invisible': [('al_products_selected', '&lt;=', 10000)]}">
+                            As only 10,000 products can be processed per day, the remaining will be
+                            done tomorrow.
+                        </span>
+                    </p>
+                    <footer>
+                        <button name="action_send_allegro_offer"
+                                type="object"
+                                string="Send Offers"
+                                class="oe_highlight"
+                                attrs="{'invisible': [('al_products_to_process', '=', 0)]}"/>
+                        <button special="cancel"
+                                string="Cancel"
+                                attrs="{'invisible': [('al_products_to_process', '=', 0)]}"/>
+                        <button special="cancel"
+                                string="Cancel"
+                                class="oe_highlight"
+                                attrs="{'invisible': [('al_products_to_process', '!=', 0)]}"/>
+                    </footer>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="product_template_action_send_allegro_offer_from_barcode" model="ir.actions.act_window">
+        <field name="name">Send Offer to Allegro</field>
+        <field name="res_model">product.send.allegro.offer.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+        <field name="binding_model_id" ref="product.model_product_template"/>
+    </record>
+
+    <record id="product_product_action_send_allegro_offer_from_barcode" model="ir.actions.act_window">
+        <field name="name">Send Offer to Allegro</field>
+        <field name="res_model">product.send.allegro.offer.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+        <field name="binding_model_id" ref="product.model_product_product"/>
+    </record>
+
+</odoo>

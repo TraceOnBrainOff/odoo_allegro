@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo noupdate="1">
+
+    <record model="ir.rule" id="odoo_allegro_product_send_allegro_offer_wizard_rule">
+        <field name="name">
+            Product send offer wizard: access only your own wizard
+        </field>
+        <field name="model_id" ref="model_product_send_allegro_offer_wizard"/>
+        <field name="domain_force">[('create_uid', '=', user.id)]</field>
+    </record>
+
+</odoo>

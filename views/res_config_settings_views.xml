@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="res_config_settings_view_form" model="ir.ui.view">
+        <field name="name">res.config.settings.view.form.inherit.product.images</field>
+        <field name="model">res.config.settings</field>
+        <field name="inherit_id" ref="base_setup.res_config_settings_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//div[@id='msg_module_odoo_allegro']" position="replace">
+                <div class="content-group"
+                     attrs="{'invisible': [('module_odoo_allegro', '=', False)]}"
+                     id="msg_module_odoo_allegro">
+                    <div class="content-group mt16 row">
+                        <label string="Allegro Application ID" for="allegro_application_id"
+                               class="col-4 col-lg-4 o_light_label"/>
+                        <field name="allegro_application_id" nolabel="1"/>
+                        <label string="Allegro Application Secret" for="allegro_application_secret"
+                               class="col-4 col-lg-4 o_light_label"/>
+                        <field name="allegro_application_secret" nolabel="1"/>
+                    </div>
+                </div>
+            </xpath>
+        </field>
+    </record>
+</odoo>

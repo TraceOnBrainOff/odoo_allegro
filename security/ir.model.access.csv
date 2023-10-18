@@ -1,0 +1,2 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_product_allegro_send_offer_manager,odoo.allegro.send.offer manager,model_product_send_allegro_offer_wizard,base.group_system,1,1,1,0
