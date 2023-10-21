@@ -1,9 +1,12 @@
 #Do the logic in _process_products(), repurpose _fetch_image_urls_from_google() for sending the offer in Allegro's API,
 #
+import allegro_auth
 
 import base64
 import logging
 from datetime import timedelta
+import string
+import json
 
 import requests
 from requests.exceptions import ConnectionError as RequestConnectionError
@@ -18,6 +21,7 @@ class ProductSendAllegroOfferWizard(models.TransientModel):
     _name = 'product.send.allegro.offer.wizard'
     _description = "Send catalogue related offers to Allegro based on the provided barcode."
     _session = requests.Session()
+    _token = None
 
     @api.model
     def default_get(self, fields_list): #Should be OK
@@ -266,15 +270,16 @@ class ProductSendAllegroOfferWizard(models.TransientModel):
         """
         if not barcode:
             return
-
         ICP = self.env['ir.config_parameter']
-        secret = ICP.get_param('allegro.application.secret').strip()
+        CLIENT_ID = ICP.get_param('allegro.application.id').strip()
+        CLIENT_SECRET = ICP.get_param('allegro.application.secret').strip()
+        access_token = allegro_auth.token_check(ICP, CLIENT_ID, CLIENT_SECRET)
         return self._session.get(
             url='https://api.allegro.pl/sale/product-offers',
             headers={
-                'authorization: Bearer {secret}',
-                'accept: application/vnd.allegro.public.v1+json',
-                'content-type: application/vnd.allegro.public.v1+json',
+                'authorization': f'Bearer {access_token}',
+                'accept': 'application/vnd.allegro.public.v1+json',
+                'content-type': 'application/vnd.allegro.public.v1+json',
             },
             params={
                 'productSet': [{
