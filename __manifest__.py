@@ -1,6 +1,6 @@
 {
     'name': "Allegro Integration",
-    'version': '0.2.0',
+    'version': '0.3.0',
     'depends': ['base', 'stock', 'product'],
     'author': "7",
     'category': 'Inventory/Allegro Integration',

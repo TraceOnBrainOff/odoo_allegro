@@ -12,7 +12,7 @@ def get_code(CLIENT_ID, CLIENT_SECRET):
         headers = {'Content-type': 'application/x-www-form-urlencoded'}
         api_call_response = requests.post(CODE_URL, auth=(CLIENT_ID, CLIENT_SECRET),
                                           headers=headers, data=payload, verify=False)
-        code = json.loads(api_call_response.text)
+        code = api_call_response.json()
         return code
     except requests.exceptions.HTTPError as err:
         raise UserError("OAuth get_code error:"+err)
@@ -25,7 +25,7 @@ def get_new_token(device_code, CLIENT_ID, CLIENT_SECRET):
         data = {'grant_type': 'urn:ietf:params:oauth:grant-type:device_code', 'device_code': device_code}
         api_call_response = requests.post(TOKEN_URL, auth=(CLIENT_ID, CLIENT_SECRET),
                                           headers=headers, data=data, verify=False)
-        tokens = json.loads(api_call_response.text)
+        tokens = api_call_response.json()
         return tokens
     except requests.exceptions.HTTPError as err:
         raise UserError("OAuth get_code error:"+err)
@@ -36,16 +36,16 @@ def get_next_token(refresh_token, CLIENT_ID, CLIENT_SECRET): #Used for getting a
         data = {'grant_type': 'refresh_token', 'refresh_token': refresh_token}
         access_token_response = requests.post(TOKEN_URL, data=data, verify=False,
                                               allow_redirects=False, auth=(CLIENT_ID, CLIENT_SECRET))
-        tokens = json.loads(access_token_response.text)
+        tokens = access_token_response.json()
         return tokens
     except requests.exceptions.HTTPError as err:
         raise SystemExit(err)
 
-def await_for_token(interval, device_code):
+def await_for_token(interval, device_code, CLIENT_ID, CLIENT_SECRET):
     while True:
         time.sleep(interval)
-        result_access_token = get_new_token(device_code)
-        token = json.loads(result_access_token.text)
+        result_access_token = get_new_token(device_code, CLIENT_ID, CLIENT_SECRET)
+        token = result_access_token.json()
         if result_access_token.status_code == 400:
             if token['error'] == 'slow_down':
                 interval += interval
@@ -91,6 +91,6 @@ def save_token(ICP, token):
 def get_new_tokens(ICP, CLIENT_ID, CLIENT_SECRET):
     result = get_code(CLIENT_ID, CLIENT_SECRET) #For manual auth
     webbrowser.open(result['verification_uri_complete'])
-    token = await_for_token(int(result['interval']), result['device_code'])
+    token = await_for_token(int(result['interval']), result['device_code'], CLIENT_ID, CLIENT_SECRET)
     save_token(ICP, token)
     return token['access_token']
