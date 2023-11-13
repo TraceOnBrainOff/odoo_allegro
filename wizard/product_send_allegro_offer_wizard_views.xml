@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-
     <record id="product_send_allegro_offer_wizard_view_form" model="ir.ui.view">
         <field name="name">product.send.allegro.offer.wizard.view</field>
         <field name="model">product.send.allegro.offer.wizard</field>
@@ -37,21 +36,20 @@
             </form>
         </field>
     </record>
-
     <record id="product_template_action_send_allegro_offer_from_barcode" model="ir.actions.act_window">
-        <field name="name">Send Offer to Allegro</field>
+        <field name="name">Send Offer to Allegro 1</field>
         <field name="res_model">product.send.allegro.offer.wizard</field>
         <field name="view_mode">form</field>
         <field name="target">new</field>
         <field name="binding_model_id" ref="product.model_product_template"/>
     </record>
-
+    <!--
     <record id="product_product_action_send_allegro_offer_from_barcode" model="ir.actions.act_window">
-        <field name="name">Send Offer to Allegro</field>
+        <field name="name">Send Offer to Allegro 2</field>
         <field name="res_model">product.send.allegro.offer.wizard</field>
         <field name="view_mode">form</field>
         <field name="target">new</field>
         <field name="binding_model_id" ref="product.model_product_product"/>
     </record>
-
+    -->
 </odoo>

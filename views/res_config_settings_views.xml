@@ -14,6 +14,12 @@
                         <label string="Allegro Application Secret" for="allegro_client_secret"
                                class="col-4 col-lg-4 o_light_label"/>
                         <field name="allegro_client_secret" nolabel="1"/>
+                        <label string="Allegro Refresh Token Override" for="allegro_refresh_token_override"
+                               class="col-4 col-lg-4 o_light_label"/>
+                        <field name="allegro_refresh_token_override" nolabel="1"/>
+                        <label string="Allegro Tokens" for="allegro_token"
+                               class="col-4 col-lg-4 o_light_label"/>
+                        <field name="allegro_token" nolabel="1"/>
                     </div>
                 </div>
             </xpath>

@@ -64,7 +64,7 @@ class ProductSendAllegroOfferWizard(models.TransientModel):
                 self._context.get('active_ids')
             )
         al_products_selected = len(product_ids)
-        products_to_process = product_ids.filtered(lambda p: bool(p.x_EAN))
+        products_to_process = product_ids.filtered(lambda p: bool(p.EAN))
         al_products_to_process = len(products_to_process)
         al_products_unable_to_process = al_products_selected - al_products_to_process
         defaults = super().default_get(fields_list)
@@ -177,7 +177,7 @@ class ProductSendAllegroOfferWizard(models.TransientModel):
             # p.send_allegro_offer_pending needed for self.products_to_process's records that might already
             # have been processed but not yet removed from the list when called from
             # action_fetch_image.
-            lambda p: p.x_EAN and p.send_allegro_offer_pending
+            lambda p: p.EAN and p.send_allegro_offer_pending
         )[:limit]  # Apply the limit after the filter with self.products_to_process for more results
 
     def _process_products(self, products_to_process):
@@ -190,14 +190,15 @@ class ProductSendAllegroOfferWizard(models.TransientModel):
         for product in products_to_process:
             # Fetch image URLs and handle eventual errors
             try:
-                response = self._send_offer_from_barcode_to_allegro(product.x_EAN)
+                response = self._send_offer_from_barcode_to_allegro(product)
+                #_logger.warning(string(response.json()))
                 if response.status_code == requests.codes.forbidden:
                     raise UserError(_(
-                        f"Forbidden. Reason: {string(response.json())}"
+                        f"Forbidden. Reason: {response.json()}"
                     ))
                 elif response.status_code == requests.codes.service_unavailable:
                     raise UserError(_(
-                        f"Service Unavailable. Reason: {string(response.json())}"
+                        f"Service Unavailable. Reason: {response.json()}"
                     ))
                 elif response.status_code == requests.codes.too_many_requests:
                     self.with_context(automatically_triggered=True)._trigger_send_allegro_offers_cron(
@@ -209,15 +210,19 @@ class ProductSendAllegroOfferWizard(models.TransientModel):
                     break
                 elif response.status_code == requests.codes.bad_request:
                     raise UserError(_(
-                        f"Bad Request. Reason: {string(response.json())}"
+                        f"Bad Request. Reason: {response.json()}"
                     ))
                 elif response.status_code == requests.codes.unauthorized:
                     raise UserError(_(
-                        f"Unauthorized. Reason: {string(response.json())}"
+                        f"Unauthorized. Reason: {response.json()}"
                     ))
-                elif response.status_code == 422: #Unprocessable Entity
+                elif response.status_code == requests.codes.forbidden:
                     raise UserError(_(
-                        f"Unprocessable Entity. Reason: {string(response.json())}"
+                        f"Forbidden. Reason: {response.json()}"
+                    ))
+                elif response.status_code == requests.codes.unprocessable_entity:
+                    raise UserError(_(
+                        f"Unprocessable Entity. Reason: {response.json()}"
                     ))
             except (RequestConnectionError):
                 al_timeouts += 1
@@ -234,27 +239,32 @@ class ProductSendAllegroOfferWizard(models.TransientModel):
                 )
                 break
 
-            if response.status_code==201:
-                self.handle_created_offer(response)
+            if response.status_code==requests.codes.created:
+                _logger.warning(json.dumps(response.json()))
+                allegro_id = self._handle_created_offer(response)
                 sent_offers += 1
-            elif response.status_code==202:
-                self.await_offer_creation(response)
+            elif response.status_code==requests.codes.accepted:
+                allegro_id = self._await_offer_creation(response)
                 sent_offers += 1
-            else:
-                pass #man idfk im high on coffee
-            #if callback is returned tally up sent_offers number
-            product.send_allegro_offer_pending = False
-            self.env.cr.commit()  # Commit every image in case the cron is killed
+            if response.status_code==requests.codes.created or response.status_code==requests.codes.accepted: #only commit to db when the requests succeed
+                product.allegro_offer_id = allegro_id
+                product.send_allegro_offer_pending = False
+                self.env.cr.commit()  # Commit every image in case the cron is killed
+            else: #try to cover edge cases or at least see what can cause them 
+                reason = f"Logic runaway: response: {response}"
+                _logger.error(reason)
+                raise UserError(_(
+                        f"Logic runaway: {reason}"
+                    ))
         
-    def handle_created_offer(self):
-        pass
-    def await_offer_creation(self, original_response):
+    def _handle_created_offer(self, response):
+        offer = response.json()
+        id = offer['id']
+        return id #allegro offer ID
+    def _await_offer_creation(self, original_response):
         interval = original_response.headers['retry-after']
         pending_resource_location = original_response.headers['location']
-        ICP = self.env['ir.config_parameter']
-        CLIENT_ID = ICP.get_param('allegro.application.id').strip()
-        CLIENT_SECRET = ICP.get_param('allegro.application.secret').strip()
-        access_token = allegro_auth.token_check(ICP, CLIENT_ID, CLIENT_SECRET)
+        access_token = self._get_allegro_access_token()
         while True:
             time.sleep(interval)
             status_response = requests.get(
@@ -265,13 +275,13 @@ class ProductSendAllegroOfferWizard(models.TransientModel):
                     'Content-Type': 'application/vnd.allegro.public.v1+json',
                 }
             )
-            if status_response.status_code == 202:
+            if status_response.status_code == requests.codes.accepted: #202 - Continue waiting
                 if status_response['error'] == 'slow_down':
                     interval += interval
                 if status_response['error'] == 'access_denied':
                     raise UserError("Token - Access Denied")
-            elif status_response.status_code == 303:
-                allegro_product_id = status_response.json().id
+            elif status_response.status_code == requests.codes.see_other: #303 - Completed, pass logic onto _handle_created_offer()
+                allegro_product_id = status_response.json()['id']
                 created_offer_response = requests.get(
                 url = f'https://api.allegro.pl/sale/product-offers/{allegro_product_id}',
                 headers = {
@@ -279,10 +289,10 @@ class ProductSendAllegroOfferWizard(models.TransientModel):
                     'Accept': 'application/vnd.allegro.public.v1+json',
                     'Content-Type': 'application/vnd.allegro.public.v1+json',
                 })
-                self.handle_created_offer(created_offer_response)
+                return self._handle_created_offer(created_offer_response)
             else:
                 raise UserError(f'Error Code {status_response.status_code}. Reason: {status_response.json()}')
-    def _send_offer_from_barcode_to_allegro(self, barcode):
+    def _send_offer_from_barcode_to_allegro(self, product):
         """Allegro's rate limit is 9000 per minute, if you exceed that, it'll lock your client ID for a minute
         If this happens they return 429 Too Many Requests. 
 
@@ -293,40 +303,62 @@ class ProductSendAllegroOfferWizard(models.TransientModel):
         :return: A response or None
         :rtype: Response
         """
-        if not barcode:
-            return
+        url='https://api.allegro.pl/sale/product-offers'
+        if not product.EAN:
+            raise UserError(_(
+                f"No barcode!"
+            ))
+        access_token = self._get_allegro_access_token()
+        request_data = {
+            "productSet": [
+                {
+                    "product": {
+                        "id": product.EAN,
+                        "idType": "GTIN"
+                    }
+                }
+            ],
+            "parameters": [
+                {
+                    "name": "Stan",
+                    "values": [
+                        "Powystawowy"
+                    ]
+                }
+            ],
+            "sellingMode": {
+                "format": "BUY_NOW",
+                "price": {
+                    "amount": "100.00",
+                    "currency": "PLN"
+                }
+            },
+            "stock": {
+                "available": 1,
+                "unit": "UNIT"
+            },
+            "publication": {
+                "status": "INACTIVE"
+            },
+            "external": {
+                "id": product.LPN
+            }
+        }
+        return requests.post(
+            url,
+            headers={
+                'Authorization': f'Bearer {access_token}',
+                'Accept': 'application/vnd.allegro.public.v1+json',
+                'Content-Type': 'application/vnd.allegro.public.v1+json'
+            },
+            json=request_data #lmao lol even
+        )
+    def _get_allegro_access_token(self):
         ICP = self.env['ir.config_parameter']
         CLIENT_ID = ICP.get_param('allegro.application.id').strip()
         CLIENT_SECRET = ICP.get_param('allegro.application.secret').strip()
-        access_token = allegro_auth.token_check(ICP, CLIENT_ID, CLIENT_SECRET)
-        return requests.post(
-            url='https://api.allegro.pl/sale/product-offers',
-            headers={
-                'authorization': f'Bearer {access_token}',
-                'accept': 'application/vnd.allegro.public.v1+json',
-                'content-type': 'application/vnd.allegro.public.v1+json',
-            },
-            params={
-                'productSet': [{
-                    'product': {
-                        "id": barcode,
-                        "idType": "GTIN"
-                    }
-                }],
-                "sellingMode": {
-                    "price": {
-                        "amount": 1,
-                        "currency": "PLN"
-                    }
-                },
-                "stock": {
-                    "available": 1
-                },
-                "publication": {
-                    "status": "INACTIVE"
-                }
-            }
-        )
+        access_token = allegro_auth.token_check(self, ICP, CLIENT_ID, CLIENT_SECRET)
+        return access_token
 
     def _trigger_send_allegro_offers_cron(self, at=None): #OK
         """ Create a trigger for the con `ir_cron_send_allegro_offer`.

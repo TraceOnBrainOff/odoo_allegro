@@ -12,6 +12,7 @@
         'security/ir.model.access.csv',
         'views/res_config_settings_views.xml',
         'wizard/product_send_allegro_offer_wizard_views.xml',
+        'views/product_view.xml'
     ],
     'uninstall_hook': 'uninstall_hook',
 }
