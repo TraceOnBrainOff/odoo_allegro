@@ -240,7 +240,7 @@ class ProductSendAllegroOfferWizard(models.TransientModel):
                 break
 
             if response.status_code==requests.codes.created:
-                _logger.warning(json.dumps(response.json()))
+                #_logger.warning(json.dumps(response.json()))
                 allegro_id = self._handle_created_offer(response)
                 sent_offers += 1
             elif response.status_code==requests.codes.accepted:
@@ -292,6 +292,37 @@ class ProductSendAllegroOfferWizard(models.TransientModel):
                 return self._handle_created_offer(created_offer_response)
             else:
                 raise UserError(f'Error Code {status_response.status_code}. Reason: {status_response.json()}')
+    def _get_allegro_product_uuid(self, product, access_token):
+        url='https://api.allegro.pl/sale/products'
+        request_data = {
+            'phrase': product.EAN,
+            'mode': 'GTIN'
+        }
+        response = requests.get(
+            url,
+            headers={
+                'Authorization': f'Bearer {access_token}',
+                'Accept': 'application/vnd.allegro.public.v1+json',
+                'Content-Type': 'application/vnd.allegro.public.v1+json'
+            },
+            params=request_data
+        )
+        if response.status_code == requests.codes.unauthorized:
+            raise UserError(_(
+                f"Unauthorized. Reason: {response.json()}"
+            ))
+        elif response.status_code == requests.codes.unprocessable_entity:
+            raise UserError(_(
+                f"One of the parameters has an invalid value. Reason: {response.json()}"
+            ))
+        rsp_json = response.json()
+        #_logger.warning(string(rsp_json))
+        product_list = rsp_json['products']
+        if len(product_list) == 0:
+            raise UserError(_(
+                "No product found."
+            ))
+        return product_list[0]['id']
     def _send_offer_from_barcode_to_allegro(self, product):
         """Allegro's rate limit is 9000 per minute, if you exceed that, it'll lock your client ID for a minute
         If this happens they return 429 Too Many Requests. 
@@ -309,12 +340,12 @@ class ProductSendAllegroOfferWizard(models.TransientModel):
                 f"No barcode!"
             ))
         access_token = self._get_allegro_access_token()
+        product_uuid = self._get_allegro_product_uuid(product, access_token)
         request_data = {
             "productSet": [
                 {
                     "product": {
-                        "id": product.EAN,
-                        "idType": "GTIN"
+                        "id": product_uuid,
                     }
                 }
             ],
@@ -322,7 +353,7 @@ class ProductSendAllegroOfferWizard(models.TransientModel):
                 {
                     "name": "Stan",
                     "values": [
-                        "Powystawowy"
+                        "Nowy"
                     ]
                 }
             ],
